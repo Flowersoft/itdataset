@@ -307,7 +307,8 @@ document.getElementById("scanBtn").addEventListener("click", () => {
     { facingMode: "environment" }, // hátlapi kamera
     { fps: 10, qrbox: 250 },
     decodedText => {
-      document.getElementById("filterValue").value = decodedText;
+	  const input = document.getElementById("filterValue");
+      input.value = decodedText;
 	  input.dispatchEvent(new Event("input", { bubbles: true }));
       scanner.stop().then(() => {
         document.getElementById("reader").style.display = "none";
