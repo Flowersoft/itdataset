@@ -33,13 +33,9 @@
       margin: 0 auto;
       touch-action: none;
     }
-	#operationBox {
+	.no-web {
 	  display: block;
 	}
-	#secondFilter {
-	  display: block;
-	}
-	
     select, input[type='text'], input[list], input[type='file'] {
       width: 50%;
       max-width: 250px;
@@ -173,8 +169,7 @@
     @media (max-width: 768px) {
       body { padding: 20px; }
       h2 { font-size: 1.5em; }
-      #operationBox { display: none; }
-      #secondFilter { display: none; }
+      .no-web { display: none; }
       .latest-values { font-size: 1.5em; }
       .chartpar-box, .slider-box { display: block; }
       select, input[type='text'], input[list] { font-size: 0.8em; padding: 6px; }
@@ -199,7 +194,11 @@
 </head>
 <body>
   <h2>CSV Nézegető és Szerkesztő</h2>
-  <div class='simple-box'>
+  <div class='simple-box' id='scanBox'>
+    <button id="scanBtn">Vonalkód beolvasása</button>
+  <div id="reader" style="width:300px;"></div>
+  </div>	
+  <div class='simple-box no-web' id='openAndSave'>
     <label>Kódolás:</label>
     <select id="encodingSelect">
       <option value="utf-8" selected>UTF-8</option>
@@ -211,18 +210,18 @@
     <input type='file' id='csvFile' accept='.csv'>
     <button id="saveBtn">Mentés</button>
   </div>
-  <div class='simple-box'>
+  <div class='simple-box' id='firstFilter'>
     <span id="rowCount" style="margin-left:20px; font-weight:bold;"></span>
 	<select id="fieldSelect"></select>
     <label for='filterValue'>Szűrés...</label>
     <input type='text' id='filterValue' placeholder='Érték' />
-    <label><input type="checkbox" id="sortDesc"> Csökkenő sorrend</label>
+    <label><input type="checkbox" id="sortDesc"> Csökk.</label>
+  </div>
+  <div class='simple-box no-web' id='secondFilter'>
     <label>
       <input type='checkbox' id='includeText' checked>
       Tartalmazza / Nem tartalmazza
     </label>
-  </div>
-  <div class='simple-box' id='secondFilter'>
     <label>
       <input type="radio" name="combineMode" value="and" checked> ÉS
     </label>
@@ -232,7 +231,7 @@
     <select id="fieldSelect2"></select>
     <input type='text' id='filterValue2' placeholder='Érték' />
   </div>
-  <div class='simple-box' id='operationBox'> 
+  <div class='simple-box no-web' id='operationBox'> 
     <button onclick="addRow()">Új sor</button>
     <button class="danger-btn" onclick="deleteRow()">Sor törlése</button>
     <button onclick="addColumn()">Új oszlop</button>
@@ -240,12 +239,7 @@
     <button onclick="window.print()">Nyomtatás</button>
   </div>
   <div id="dataTable"></div>
-  <div class='simple-box'>
-    <button id="scanBtn">Vonalkód beolvasása</button>
-  </div>	
-  <div id="reader" style="width:300px;"></div>
-
-  <div class='footer-box' style='background-color: #505050;'>
+  <div class='footer-box' id='footerBox' style='background-color: #505050;'>
     <p>© 2025 IT_CSV v.1.0</p>
   </div>
   <div id="editorPopup">
