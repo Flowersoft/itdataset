@@ -299,7 +299,6 @@ function loadBaseCsv() {
 }
 
 document.getElementById("scanBtn").addEventListener("click", () => {
-//https://unpkg.com/html5-qrcode
   const readerDiv = document.getElementById("reader");
   readerDiv.style.display = "block"; // kamera előnézet megjelenítése
   scanner = new Html5Qrcode("reader");
@@ -309,7 +308,8 @@ document.getElementById("scanBtn").addEventListener("click", () => {
     decodedText => {
 	  const input = document.getElementById("filterValue");
       input.value = decodedText;
-	  input.dispatchEvent(new Event("input", { bubbles: true }));
+	  drawVirtualTable();
+	  //input.dispatchEvent(new Event("input", { bubbles: true }));
       scanner.stop().then(() => {
         document.getElementById("reader").style.display = "none";
       });
