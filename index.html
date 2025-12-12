@@ -138,8 +138,6 @@ document.getElementById("scanBtn").addEventListener("click", () => {
   });
 });
 
-
-
 document.getElementById('csvFile').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -226,39 +224,51 @@ function drawVirtualTable() {
   const tbody = document.createElement('tbody');
   table.appendChild(tbody);
 
-	function renderRows(startIndex) {
-	  tbody.innerHTML = '';
-	  const endIndex = Math.min(startIndex + visibleRows, filtered.length);
-	  for (let i = startIndex; i < endIndex; i++) {
-		const obj = filtered[i];
-		const tr = document.createElement('tr');
-		tr.onclick = () => {
-		  // előző kijelölés törlése
-		  tbody.querySelectorAll("tr").forEach(r => r.classList.remove("selected"));
-		  tr.classList.add("selected");
-		  selectedRowIndex = obj.index; // eredeti rows index
-		};
-		obj.row.forEach((val, ci) => {
-		  const td = document.createElement('td');
-		  td.textContent = val;
-		  td.title = val;
-		  td.oncontextmenu = (e) => {
-			e.preventDefault(); // ne nyíljon meg a böngésző menü
-			navigator.clipboard.writeText(td.textContent).then(() => {
-				console.log("Másolva a vágólapra:", td.textContent);
-			}).catch(err => {
-			console.error("Másolás sikertelen:", err);
-			});
-			currentEdit = { rowIndex: obj.index, colIndex: ci, td };
-			document.getElementById('editorArea').value = td.textContent;
-			document.getElementById('editorPopup').style.display = 'block';
-		  };
-		  tr.appendChild(td);
-		});
-		tbody.appendChild(tr);
-	  }
+function renderRows(startIndex) {
+  tbody.innerHTML = '';
+  const endIndex = Math.min(startIndex + visibleRows, filtered.length);
+
+  for (let i = startIndex; i < endIndex; i++) {
+    const obj = filtered[i];
+    const tr = document.createElement('tr');
+
+    tr.onclick = () => {
+      // előző kijelölés törlése
+      tbody.querySelectorAll("tr").forEach(r => r.classList.remove("selected"));
+      tr.classList.add("selected");
+      selectedRowIndex = obj.index; // eredeti rows index
+    };
+
+    // ha ez a sor volt kijelölve, állítsuk vissza
+    if (obj.index === selectedRowIndex) {
+      tr.classList.add("selected");
+    }
+
+    obj.row.forEach((val, ci) => {
+      const td = document.createElement('td');
+      td.textContent = val;
+      td.title = val;
+      td.oncontextmenu = (e) => {
+        e.preventDefault();
+        navigator.clipboard.writeText(td.textContent).then(() => {
+          console.log("Másolva a vágólapra:", td.textContent);
+        }).catch(err => {
+          console.error("Másolás sikertelen:", err);
+        });
+        currentEdit = { rowIndex: obj.index, colIndex: ci, td };
+        document.getElementById('editorArea').value = td.textContent;
+        document.getElementById('editorPopup').style.display = 'block';
+        document.getElementById('editorArea').focus();
+      };
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  }
+
   table.style.top = (startIndex * rowHeight) + 'px';
 }
+
   viewport.addEventListener('scroll', () => {
     const startIndex = Math.floor(viewport.scrollTop / rowHeight);
     renderRows(startIndex);
