@@ -15,6 +15,7 @@
   <h2>CSV Nézegető és Szerkesztő</h2>
   <div class='simple-box' id='scanBox'>
     <button id="scanBtn">Vonalkód beolvasása</button>
+    <label><input type="checkbox" id="eanEnabled"> EAN keresés</label>
   <div id="reader" style="width:300px;"></div>
   </div>	
   <div class='simple-box no-web' id='openAndSave'>
@@ -58,6 +59,7 @@
     <button onclick="window.print()">Nyomtatás</button>
   </div>
   <div id="dataTable"></div>
+  <div id="eanTable"></div>
   <div class='footer-box' id='footerBox' style='background-color: #505050;'>
     <p>© 2025 IT_CSV v.1.0</p>
   </div>
@@ -118,6 +120,8 @@ function loadBaseCsv() {
 
 document.getElementById("scanBtn").addEventListener("click", () => {
   const readerDiv = document.getElementById("reader");
+  const container = document.getElementById("eanTable");
+  container.innerHTML = "";
   readerDiv.style.display = "block";
   scanner = new Html5Qrcode("reader");
   scanner.start(
@@ -125,6 +129,8 @@ document.getElementById("scanBtn").addEventListener("click", () => {
     { fps: 10, qrbox: 250 },
     decodedText => {
       const input = document.getElementById("filterValue");
+      const eanEnabled = document.getElementById('eanEnabled').checked;
+	  if (eanEnabled) searchBarcode(decodedText);
       input.value = decodedText;
       drawVirtualTable();
       scanner.stop().then(() => {
@@ -469,6 +475,51 @@ function saveFilteredCSV(filtered) {
   a.download = 'table.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+async function searchBarcode(code) {
+  const url = `https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("API hiba: " + resp.status);
+    const data = await resp.json();
+
+    const container = document.getElementById("eanTable");
+    container.innerHTML = ""; // előző tartalom törlése
+    if (data.items && data.items.length > 0) {
+      const table = document.createElement("table");
+      table.border = "1";
+      const headerRow = document.createElement("tr");
+      ["UPC", "Név", "Gyártó", "Kategória"].forEach(h => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        headerRow.appendChild(th);
+      });
+      table.appendChild(headerRow);
+      data.items.forEach(item => {
+        const tr = document.createElement("tr");
+        const tdUpc = document.createElement("td");
+        tdUpc.textContent = item.upc || code;
+        tr.appendChild(tdUpc);
+        const tdTitle = document.createElement("td");
+        tdTitle.textContent = item.title || "";
+        tr.appendChild(tdTitle);
+        const tdBrand = document.createElement("td");
+        tdBrand.textContent = item.brand || "";
+        tr.appendChild(tdBrand);
+        const tdCategory = document.createElement("td");
+        tdCategory.textContent = item.category || "";
+        tr.appendChild(tdCategory);
+        table.appendChild(tr);
+      });
+      container.appendChild(table);
+    } else {
+      container.textContent = "Nincs találat erre a kódra: " + code;
+    }
+  } catch (err) {
+    console.error("Lekérdezés sikertelen:", err);
+    document.getElementById("eanTable").textContent = "Hiba történt a lekérdezésnél.";
+  }
 }
 
 document.getElementById('fieldSelect').addEventListener('change', drawVirtualTable);
