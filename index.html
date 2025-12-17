@@ -59,7 +59,7 @@
     <button onclick="window.print()">Nyomtatás</button>
   </div>
   <div id="dataTable"></div>
-  <div id="eanTable"></div>
+  <div class="simple-box" id="eanTable"></div>
   <div class='footer-box' id='footerBox' style='background-color: #505050;'>
     <p>© 2025 IT_CSV v.1.0</p>
   </div>
@@ -121,15 +121,17 @@ function loadBaseCsv() {
 document.getElementById("scanBtn").addEventListener("click", () => {
   const readerDiv = document.getElementById("reader");
   const container = document.getElementById("eanTable");
-  container.innerHTML = "";
+  const eanEnabled = document.getElementById('eanEnabled').checked;
+  container.innerHTML = "(EAN-Ablak)";
   readerDiv.style.display = "block";
+  //if (eanEnabled) searchBarcode("7630049201545");
+  //return;
   scanner = new Html5Qrcode("reader");
   scanner.start(
     { facingMode: "environment" },
     { fps: 10, qrbox: 250 },
     decodedText => {
       const input = document.getElementById("filterValue");
-      const eanEnabled = document.getElementById('eanEnabled').checked;
 	  if (eanEnabled) searchBarcode(decodedText);
       input.value = decodedText;
       drawVirtualTable();
