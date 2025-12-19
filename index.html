@@ -3,7 +3,7 @@
 <head>
   <meta charset='utf-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1, shrink-to-fit=no'>
-  <title>IT_CSV - CSV Nézegető és Szerkesztő</title>
+  <title>IT_DATASET Adattábla nézegető és szerkesztő</title>
   <script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0'></script>
   <script src='https://cdn.jsdelivr.net/npm/hammerjs@2.0.8'></script>
   <script src='https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0'></script>
@@ -12,7 +12,7 @@
   <link rel='icon' type='image/png' href='favicon.ico'>
 </head>
 <body>
-  <h2>CSV Nézegető és Szerkesztő</h2>
+  <h2>Adattábla nézegető és szerkesztő</h2>
   <div class='simple-box' id='scanBox'>
     <button id="scanBtn">Vonalkód beolvasása</button>
     <label><input type="checkbox" id="eanEnabled"> EAN</label>
@@ -27,8 +27,9 @@
     </select>
     <label>Határoló:</label>
     <input type="text" id="delimiterInput" value=";" maxlength="1" style="width:30px; text-align:center;">
-    <input type='file' id='csvFile' accept='.csv'>
-    <button id="saveBtn">Mentés</button>
+    <input type='file' id='dataFile' accept='.csv, .json'>
+    <button id="saveCsvBtn">CSV Mentés</button>
+	<button id="saveJsonBtn">JSON mentés</button>
   </div>
   <div class='simple-box' id='firstFilter'>
     <span id="rowCount" style="margin-left:20px; font-weight:bold;"></span>
@@ -61,7 +62,7 @@
   <div id="eanTable"></div>
   <div id="dataTable"></div>
   <div class='footer-box' id='footerBox' style='background-color: #505050;'>
-    <p>© 2025 IT_CSV v.1.0</p>
+    <p>© 2025 IT_DATASET v.1.0</p>
   </div>
   <div id="editorPopup">
     <textarea id="editorArea"></textarea><br>
@@ -71,13 +72,42 @@
 
 <script>
 let scanner;
+let fieldDefinitions = { extraInfo: [] };
 let headers = [];
 let rows = [];
 let selectedRowIndex = null;
 let selectedColIndex = null;
 let currentEdit = null;
+let defaultPrefix = null;
+let filtered = [];
 const rowHeight = 28;    
 const visibleRows = 20; 
+
+function resetAll() {
+  headers = [];
+  rows = [];
+  filtered = [];
+  fieldDefinitions = { extraInfo: [] };
+  selectedRowIndex = null;
+  selectedColIndex = null;
+  currentEdit = null;
+  const tableBody = document.getElementById("tableBody");
+  if (tableBody) tableBody.innerHTML = "";
+  const tableHeader = document.getElementById("tableHeader");
+  if (tableHeader) tableHeader.innerHTML = "";
+  const saveBtn = document.getElementById("saveCsvBtn");
+  if (saveBtn) saveBtn.textContent = "CSV Mentés";
+  const saveJsonBtn = document.getElementById("saveJsonBtn");
+  if (saveJsonBtn) saveJsonBtn.textContent = "JSON mentés";
+}
+
+function createEmptyTable() {
+  resetAll();
+  headers = ["Azonosító"];
+  fieldDefinitions = { extraInfo: [] };
+  rows = [];
+  drawVirtualTable();
+}
 
 function loadBaseCsv() {
 // pl. max 768px szélesség → mobil
@@ -150,21 +180,27 @@ document.getElementById("scanBtn").addEventListener("click", () => {
   });
 });
 
-document.getElementById('csvFile').addEventListener('change', e => {
+document.getElementById('dataFile').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
-  headers = [];
-  rows = [];
-  selectedRowIndex = null;
-  selectedColIndex = null;
-  currentEdit = null;
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".json")) {
+    const reader = new FileReader();
+    reader.onload = evt => {
+      const fullJson = JSON.parse(evt.target.result);
+      loadJsonIntoTable(fullJson);   // <-- JSON → táblázat adapter
+    };
+    reader.readAsText(file);
+    return; // fontos: ne fusson tovább a CSV ág
+  }
+  resetAll();
   const reader = new FileReader();
   reader.onload = evt => {
     const buffer = evt.target.result;
     const view = new Uint8Array(buffer);
     let encoding = document.getElementById('encodingSelect').value || "utf-8";
     if (view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) {
-      encoding = "utf-8"; // BOM → biztosan UTF-8
+      encoding = "utf-8";
     }
     const decoder = new TextDecoder(encoding);
     let text = decoder.decode(buffer);
@@ -175,11 +211,55 @@ document.getElementById('csvFile').addEventListener('change', e => {
     const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
     headers = lines[0].split(delimiter);
     rows = lines.slice(1).map(line => line.split(delimiter));
+    fieldDefinitions = {
+      extraInfo: headers.map((h, idx) => ({
+        id: idx + 1,
+        name: h.replace(/\s+/g, "_"),
+        label: h,
+        type: "string"
+      }))
+    };
+	rows = rows.map((r, idx) => {
+      const id = "ID-" + String(idx + 1).padStart(6, "0");
+      return [id, ...r];
+    });
+    headers = ["ID", ...headers];
+    fieldDefinitions = {
+      extraInfo: headers.slice(1).map((h, idx) => ({
+        id: idx + 1,
+        name: h.replace(/\s+/g, "_"),
+        label: h,
+        type: "string"
+      }))
+    };
     buildFieldSelect();
     drawVirtualTable();
   };
   reader.readAsArrayBuffer(file);
 });
+
+function loadJsonIntoTable(fullJson) {
+  fieldDefinitions = fullJson.fieldDefinitions;
+  const defs = fullJson.fieldDefinitions.extraInfo;
+  headers = ["Azonosító", ...defs.map(fd => fd.label)];
+  rows = Object.entries(fullJson.dataRegistry).map(([id, entry]) => {
+    const row = [id];
+    defs.forEach(fd => {
+      const valObj = entry.values.find(v => v.id === fd.id);
+      let val = valObj ? valObj.value : "";
+      if (fd.type === "list") {
+        val = JSON.stringify(val || []);
+      }
+      if (fd.type === "memo") {
+        val = val || "";
+      }
+      row.push(val);
+    });
+    return row;
+  });
+  buildFieldSelect();
+  drawVirtualTable();
+}
 
 function buildFieldSelect() {
   const select = document.getElementById('fieldSelect');
@@ -365,9 +445,24 @@ document.getElementById("fieldSelect2").addEventListener("change", e => {
       });
     }
   }
-  document.getElementById('saveBtn').textContent = filtered.length !== rows.length ? "Mentés (Szűrt)" : "Mentés";
+  document.getElementById('saveCsvBtn').textContent = filtered.length !== rows.length ? "CSV Mentés (Szűrt)" : "CSV Mentés";
+  document.getElementById('saveJsonBtn').textContent = filtered.length !== rows.length ? "JSON Mentés (Szűrt)" : "JSON Mentés";
   document.getElementById('rowCount').textContent = filtered.length + " sor";
-  document.getElementById('saveBtn').onclick = () => saveFilteredCSV(filtered);
+  document.getElementById('saveCsvBtn').onclick = () => saveFilteredCSV(filtered);
+  document.getElementById("saveJsonBtn").addEventListener("click", () => {
+    const filtered = filterAndSortTable(); 
+    const source = filtered.map(f => f.row);
+    const jsonData = tableToJson(source);
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], {
+      type: "application/json"
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "dataset.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
   return filtered;
 }
  
@@ -397,51 +492,122 @@ function scrollToSelectedColumn(table, viewport) {
   }
 }
 
-function addRow() {
-  if (selectedRowIndex !== null) {
-    const newRow = headers.map(() => "");
-    // beszúrás a kijelölt sor UTÁN
-    rows.splice(selectedRowIndex + 1, 0, newRow);
-    drawVirtualTable();
-  } else {
-    alert("Előbb jelölj ki egy sort beszúráshoz!");
+function askPrefixIfNeeded() {
+  if (defaultPrefix) return;
+  let prefix = prompt("Add meg az azonosító előtagját (pl. Cikk, TetelNaplo, ID):");
+  if (!prefix || prefix.trim() === "") {
+    prefix = "ID";
   }
+  defaultPrefix = prefix.trim() + "-";
 }
 
-function deleteRow() {
-  if (selectedRowIndex !== null) {
-    if (confirm("Biztosan törlöd a kijelölt sort?")) {
-      rows.splice(selectedRowIndex, 1);
-      selectedRowIndex = null;
-      drawVirtualTable();
-    }
-  } else {
-    alert("Előbb jelölj ki egy sort törléshez!");
+function getCurrentPrefix() {
+  if (rows.length === 0) return defaultPrefix;
+  const id = rows[0][0];
+  if (!id.includes("-")) return defaultPrefix;
+  return id.split("-")[0] + "-";
+}
+
+function generateNextId() {
+  const prefix = getCurrentPrefix();
+  const ids = rows
+    .map(r => r[0])
+    .filter(id => id.startsWith(prefix));
+  if (ids.length === 0) {
+    return prefix + "000001";
   }
+  const numbers = ids.map(id => parseInt(id.split("-")[1], 10));
+  const next = Math.max(...numbers) + 1;
+  return prefix + String(next).padStart(6, "0");
+}
+
+function addRow() {
+  if (rows.length === 0) {
+    if (headers.length === 1) {
+      addColumnAuto();   // ✅ automatikus mező, prompt nélkül
+    }
+    askPrefixIfNeeded();
+  }
+  const newId = generateNextId();
+  const newRow = [newId, ...headers.slice(1).map(() => "")];
+  if (rows.length === 0) {
+    rows.push(newRow);
+  } else if (selectedRowIndex !== null) {
+    rows.splice(selectedRowIndex + 1, 0, newRow);
+  } else {
+    rows.push(newRow);
+  }
+  drawVirtualTable();
+}
+
+function toSystemName(str) {
+  return str
+    .trim()
+    .normalize("NFD")                 // ékezetek szétbontása
+    .replace(/[\u0300-\u036f]/g, "")  // ékezetek törlése
+    .replace(/[^a-zA-Z0-9]+/g, "_")   // nem alfanumerikus → _
+    .replace(/^_+|_+$/g, "")          // felesleges _ törlése
+    .toLowerCase();
+}
+
+function addColumnAuto(name = "Mező1", type = "string") {
+  const insertIndex = headers.length;
+  headers.splice(insertIndex, 0, name);
+  rows.forEach(r => r.splice(insertIndex, 0, ""));
+  fieldDefinitions.extraInfo.push({
+    id: fieldDefinitions.extraInfo.length + 1,
+    name: toSystemName(name),
+    label: name,
+    type
+  });
+  buildFieldSelect();
 }
 
 function addColumn() {
   const newName = prompt("Új mező neve:");
-  if (!newName) return;
-  let insertIndex = (selectedColIndex !== null) ? selectedColIndex + 1 : headers.length;
-  headers.splice(insertIndex, 0, newName);
-  rows.forEach(r => r.splice(insertIndex, 0, "")); // minden sorba új üres cella
+  if (!newName || !newName.trim()) return;
+  const type = prompt(
+    "Mező típusa (string, number, memo, list):",
+    "string"
+  );
+  if (!type || !["string", "number", "memo", "list"].includes(type.trim())) {
+    alert("Érvénytelen típus, string lesz használva.");
+  }
+  const cleanName = newName.trim();
+  const cleanType = (type || "string").trim();
+  const insertIndex = (selectedColIndex !== null)
+    ? selectedColIndex + 1
+    : headers.length;
+  headers.splice(insertIndex, 0, cleanName);
+  rows.forEach(r => r.splice(insertIndex, 0, ""));
+  fieldDefinitions.extraInfo.splice(insertIndex - 1, 0, {
+    id: fieldDefinitions.extraInfo.length + 1,
+    name: toSystemName(cleanName),
+    label: cleanName,
+    type: cleanType
+  });
   buildFieldSelect();
   drawVirtualTable();
 }
 
 function deleteColumn() {
-  if (selectedColIndex !== null) {
-    if (confirm("Biztosan törlöd a kijelölt oszlopot?")) {
-      headers.splice(selectedColIndex, 1);
-      rows.forEach(r => r.splice(selectedColIndex, 1));
-      selectedColIndex = null;
-      buildFieldSelect();
-      drawVirtualTable();
-    }
-  } else {
+  if (selectedColIndex === null) {
     alert("Előbb jelölj ki egy oszlopot törléshez!");
+    return;
   }
+  if (selectedColIndex === 0) {
+    alert("Az első oszlop (Azonosító) nem törölhető!");
+    return;
+  }
+  if (!confirm("Biztosan törlöd a kijelölt oszlopot?")) {
+    return;
+  }
+  headers.splice(selectedColIndex, 1);
+  rows.forEach(r => r.splice(selectedColIndex, 1));
+  fieldDefinitions.extraInfo.splice(selectedColIndex - 1, 1);
+  selectedColIndex = null;
+  buildFieldSelect();
+  drawVirtualTable();
 }
 
 function saveEdit() {
@@ -466,9 +632,10 @@ function closeEdit() {
 
 function saveFilteredCSV(filtered) {
   const delimiter = document.getElementById('delimiterInput').value || ",";
-  const csv = [headers.join(delimiter)]
-    .concat(filtered.map(obj => obj.row.join(delimiter)))
-    .join("\n");
+  const csv = [
+    headers.slice(1).join(delimiter), // ✅ ID kihagyva
+      ...filtered.map(obj => obj.row.slice(1).join(delimiter)) // ✅ ID kihagyva
+  ].join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -476,6 +643,37 @@ function saveFilteredCSV(filtered) {
   a.download = 'table.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function tableToJson(sourceRows = rows) {
+  const defs = fieldDefinitions.extraInfo;
+  const newRegistry = {};
+  sourceRows.forEach(row => {
+    const id = row[0];
+    const values = [];
+    defs.forEach((fd, idx) => {
+      let raw = row[idx + 1];
+      if (fd.type === "number") {
+        raw = raw === "" ? null : Number(raw);
+      }
+      if (fd.type === "list") {
+        try {
+          raw = JSON.parse(raw || "[]");
+        } catch {
+          raw = [];
+        }
+      }
+      if (fd.type === "memo") {
+        raw = raw || "";
+      }
+      values.push({ id: fd.id, value: raw });
+    });
+    newRegistry[id] = { values };
+  });
+  return {
+    fieldDefinitions,
+    dataRegistry: newRegistry
+  };
 }
 
 function openApiResult(upc) {
@@ -548,5 +746,10 @@ document.querySelectorAll('input[name="combineMode"]').forEach(el => {
 document.getElementById('fieldSelect2').addEventListener('change', drawVirtualTable);
 document.getElementById('filterValue2').addEventListener('input', drawVirtualTable);
 window.addEventListener("DOMContentLoaded", loadBaseCsv);
+window.addEventListener("DOMContentLoaded", () => {
+  createEmptyTable();
+  loadBaseCsv();
+});
+
 
 </script>
