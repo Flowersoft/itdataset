@@ -64,11 +64,6 @@
   <div class='footer-box' id='footerBox' style='background-color: #505050;'>
     <p>© 2025 IT_DATASET v.1.0</p>
   </div>
-  <div id="editorPopup">
-    <textarea id="editorArea"></textarea><br>
-    <button onclick="saveEdit()">Mentés</button>
-    <button onclick="closeEdit()">Mégse</button>
-  </div>
 
 <script>
 let scanner;
@@ -183,6 +178,7 @@ document.getElementById("scanBtn").addEventListener("click", () => {
 document.getElementById('dataFile').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
+  resetAll();
   const name = file.name.toLowerCase();
   if (name.endsWith(".json")) {
     const reader = new FileReader();
@@ -193,7 +189,6 @@ document.getElementById('dataFile').addEventListener('change', e => {
     reader.readAsText(file);
     return; // fontos: ne fusson tovább a CSV ág
   }
-  resetAll();
   const reader = new FileReader();
   reader.onload = evt => {
     const buffer = evt.target.result;
@@ -336,12 +331,13 @@ function renderRows(startIndex) {
       const td = document.createElement('td');
       td.textContent = val;
       td.title = val;
+	  td.dataset.row = obj.index;
+	  td.dataset.col = ci;
       td.oncontextmenu = (e) => {
         e.preventDefault();
-        currentEdit = { rowIndex: obj.index, colIndex: ci, td };
-        document.getElementById('editorArea').value = td.textContent;
-        document.getElementById('editorPopup').style.display = 'block';
-        document.getElementById('editorArea').focus();
+        const field = fieldDefinitions.extraInfo[ci - 1];
+		const type = field.type;
+		openEditor(obj.index, ci, type);
       };
       tr.appendChild(td);
     });
@@ -492,6 +488,181 @@ function scrollToSelectedColumn(table, viewport) {
   }
 }
 
+function openEditor(rowIndex, colIndex, type) {
+  currentEdit = { rowIndex, colIndex, type };
+  const old = document.getElementById("editorPopup");
+  if (old) old.remove();
+  const td = document.querySelector(
+    `td[data-row="${rowIndex}"][data-col="${colIndex}"]`
+  );
+  const val = td ? td.textContent : "";
+  const popup = document.createElement("div");
+  popup.id = "editorPopup";
+  popup.className = "popup";
+  popup.innerHTML = generateEditorContent(type, val);
+  document.body.appendChild(popup);
+  document.getElementById("editorSave").onclick = saveEdit;
+  document.getElementById("editorCancel").onclick = closeEdit;
+  const area = document.getElementById("editorArea");
+  popup.style.display = "block";
+  if (area) area.focus();
+}
+
+function generateEditorContent(type, val) {
+  switch (type) {
+    case "string":
+      return `
+		<input type="text" id="editorArea" value="${val}" style="width:95%;"><br>
+        <button id="editorSave">Mentés</button>
+        <button id="editorCancel">Mégse</button>
+      `;
+	case "number":
+	  return `
+		<input type="number" id="editorNum" value="${val}" 
+		  style="width:95%;"
+		  oninput="document.getElementById('editorArea').value = this.value">
+		<br>
+		<input type="text" id="editorArea" value="${val}" readonly>
+		<button id="editorSave">Mentés</button>
+		<button id="editorCancel">Mégse</button>
+	  `;
+	case "date":
+	  return `
+		<input type="date" id="editorDate" value="${val}" 
+		  style="width:95%;"
+		  onchange="document.getElementById('editorArea').value = this.value">
+		<br>
+		<input type="text" id="editorArea" value="${val}" readonly>
+		<button id="editorSave">Mentés</button>
+		<button id="editorCancel">Mégse</button>
+	  `;
+	case "list":
+	  let arr = val;
+	  if (typeof arr === "string") {
+		try {
+		  arr = JSON.parse(arr);
+		} catch (e) {
+		  arr = [];
+		}
+	  }
+	  if (!Array.isArray(arr)) {
+		arr = [];
+	  }
+	  const listItems = arr.map((item, i) => `
+		<div class="list-item">
+		  <input type="text" value="${item.key}" 
+				 onchange="updateListItem(${i}, 'key', this.value)">
+		  <input type="text" value="${item.value}" 
+				 onchange="updateListItem(${i}, 'value', this.value)">
+		  <button onclick="removeListItem(${i})">❌</button>
+		</div>
+	  `).join("");
+	  return `
+		<div>
+		  <input type="text" id="listNewKey" placeholder="Kulcs..." style="width:40%;">
+		  <input type="text" id="listNewValue" placeholder="Érték..." style="width:40%;">
+		  <button onclick="addListItem()">Hozzáadás</button>
+		</div>
+		<div id="listContainer">
+		  ${listItems}
+		</div>
+		<textarea id="editorArea" readonly>${JSON.stringify(arr)}</textarea><br>
+		<button id="editorSave">Mentés</button>
+		<button id="editorCancel">Mégse</button>
+	  `;	  
+    case "boolean":
+	  const boolVal = (val && val.toString().trim().toLowerCase() === "true") ? "true" : "false";
+	  const cbState = (boolVal === "true") ? "checked" : "";
+	  return `
+	  	<label>
+	  	  <input type="checkbox" id="editorBool" ${cbState}
+			onchange="document.getElementById('editorArea').value = this.checked ? 'true' : 'false'">
+		 	Igen / Nem
+		</label>
+		<br>
+		<input type="text" id="editorArea" value="${boolVal}" readonly>
+		<button id="editorSave">Mentés</button>
+		<button id="editorCancel">Mégse</button>
+	  `;
+    default:
+      return `
+        <textarea id="editorArea">${val ?? ""}</textarea><br>
+        <button id="editorSave">Mentés</button>
+        <button id="editorCancel">Mégse</button>
+      `;
+  }
+}
+
+function addListItem() {
+  const key = document.getElementById("listNewKey").value.trim();
+  const value = document.getElementById("listNewValue").value.trim();
+  if (!key) return;
+  const container = document.getElementById("listContainer");
+  const div = document.createElement("div");
+  div.className = "list-item";
+  div.innerHTML = `
+    <input type="text" value="${key}" onchange="updateListItemDynamic(this, 'key')">
+    <input type="text" value="${value}" onchange="updateListItemDynamic(this, 'value')">
+    <button onclick="this.parentElement.remove(); updateListArea();">❌</button>
+  `;
+  container.appendChild(div);
+  document.getElementById("listNewKey").value = "";
+  document.getElementById("listNewValue").value = "";
+  updateListArea();
+}
+
+function updateListItem(index, field, newValue) {
+  const items = getListItems();
+  items[index][field] = newValue;
+  updateListArea(items);
+}
+
+function removeListItem(index) {
+  const items = getListItems();
+  items.splice(index, 1);
+  updateListArea(items);
+}
+
+function updateListArea(items) {
+  if (!items) items = getListItems();
+  document.getElementById("editorArea").value = JSON.stringify(items);
+}
+
+function getListItems() {
+  return [...document.querySelectorAll("#listContainer .list-item")].map(div => {
+    const inputs = div.querySelectorAll("input");
+    return {
+      key: inputs[0].value,
+      value: inputs[1].value
+    };
+  });
+}
+
+function saveEdit() {
+  if (!currentEdit) return;
+  const area = document.getElementById("editorArea");
+  const newVal = area ? area.value.trim() : "";
+  rows[currentEdit.rowIndex][currentEdit.colIndex] = newVal;
+  const td = document.querySelector(
+    `td[data-row="${currentEdit.rowIndex}"][data-col="${currentEdit.colIndex}"]`)
+  if (td) {
+    td.textContent = newVal;
+    td.title = newVal;
+  }
+  closeEdit();
+}
+
+function closeEdit() {
+  const tc = document.getElementById('editorArea').value;
+  navigator.clipboard.writeText(tc).then(() => {
+    console.log("Másolva a vágólapra:", tc);
+      }).catch(err => {
+        console.error("Másolás sikertelen:", err);
+   });
+  document.getElementById('editorPopup').style.display = 'none';
+  currentEdit = null;
+}
+
 function askPrefixIfNeeded() {
   if (defaultPrefix) return;
   let prefix = prompt("Add meg az azonosító előtagját (pl. Cikk, TetelNaplo, ID):");
@@ -567,10 +738,10 @@ function addColumn() {
   const newName = prompt("Új mező neve:");
   if (!newName || !newName.trim()) return;
   const type = prompt(
-    "Mező típusa (string, number, memo, list):",
+    "Mező típusa (string, number, memo, list, date, boolean):",
     "string"
   );
-  if (!type || !["string", "number", "memo", "list"].includes(type.trim())) {
+  if (!type || !["string", "number", "memo", "list", "date", "boolean"].includes(type.trim())) {
     alert("Érvénytelen típus, string lesz használva.");
   }
   const cleanName = newName.trim();
@@ -608,26 +779,6 @@ function deleteColumn() {
   selectedColIndex = null;
   buildFieldSelect();
   drawVirtualTable();
-}
-
-function saveEdit() {
-  if (!currentEdit) return;
-  const newVal = document.getElementById('editorArea').value.trim();
-  rows[currentEdit.rowIndex][currentEdit.colIndex] = newVal;
-  currentEdit.td.textContent = newVal;
-  currentEdit.td.title = newVal;
-  closeEdit();
-}
-
-function closeEdit() {
-  const tc = document.getElementById('editorArea').value;
-  navigator.clipboard.writeText(tc).then(() => {
-    console.log("Másolva a vágólapra:", tc);
-      }).catch(err => {
-        console.error("Másolás sikertelen:", err);
-   });
-  document.getElementById('editorPopup').style.display = 'none';
-  currentEdit = null;
 }
 
 function saveFilteredCSV(filtered) {

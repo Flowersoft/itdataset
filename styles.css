@@ -21,8 +21,8 @@ canvas {
   display: block;
 }
 	
-select, input[type='text'], input[list], input[type='file'] {
-  width: 50%;
+select, input[type='text'], input[type='number'], input[list], input[type='file'] {
+  width: 40%;
   max-width: 250px;
   font-size: 1em;
   padding: 5px;
@@ -149,7 +149,7 @@ tr.selected, .highlighted, td[contenteditable='true']:focus {
 
 #editorPopup {
   position: fixed;
-  top: 20%;
+  top: 40%;
   left: 50%;
   transform: translateX(-50%);
   background: #000;
@@ -162,8 +162,8 @@ tr.selected, .highlighted, td[contenteditable='true']:focus {
 }
 
 #editorPopup textarea {
-  width: 400px;
-  height: 200px;
+  width: -webkit-fill-available;
+  height: 128px;
   background-color: #333;
   color: #e0e0e0;
 }
