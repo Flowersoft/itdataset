@@ -333,6 +333,17 @@ function renderRows(startIndex) {
       td.title = val;
 	  td.dataset.row = obj.index;
 	  td.dataset.col = ci;
+	  
+	  td.addEventListener("touchstart", e => {
+		pressTimer = setTimeout(() => {
+		openContextMenu(obj.index, ci);
+		}, 600);
+	  });
+
+	  td.addEventListener("touchend", e => {
+		clearTimeout(pressTimer);
+	  });
+	  
       td.oncontextmenu = (e) => {
         e.preventDefault();
         const field = fieldDefinitions.extraInfo[ci - 1];
