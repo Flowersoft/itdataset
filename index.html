@@ -134,6 +134,27 @@ function loadBaseCsv() {
       const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
       headers = lines[0].split(delimiter);
       rows = lines.slice(1).map(line => line.split(delimiter));
+	  fieldDefinitions = {
+        extraInfo: headers.map((h, idx) => ({
+          id: idx + 1,
+          name: h.replace(/\s+/g, "_"),
+          label: h,
+          type: "string"
+        }))
+      };
+	  rows = rows.map((r, idx) => {
+        const id = "ID-" + String(idx + 1).padStart(6, "0");
+        return [id, ...r];
+      });
+      headers = ["ID", ...headers];
+      fieldDefinitions = {
+        extraInfo: headers.slice(1).map((h, idx) => ({
+          id: idx + 1,
+          name: h.replace(/\s+/g, "_"),
+          label: h,
+          type: "string"
+        }))
+      };
       console.log("base.csv betöltve induláskor");
       buildFieldSelect();
       drawVirtualTable();
@@ -924,6 +945,5 @@ window.addEventListener("DOMContentLoaded", () => {
   createEmptyTable();
   loadBaseCsv();
 });
-
 
 </script>
