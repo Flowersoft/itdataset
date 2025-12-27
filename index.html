@@ -334,15 +334,27 @@ function renderRows(startIndex) {
 	  td.dataset.row = obj.index;
 	  td.dataset.col = ci;
 	  
-	  td.addEventListener("touchstart", e => {
+	  let lastTap = 0;
+	  td.addEventListener("touchend", e => {
+	  const now = Date.now();
+	  if (now - lastTap < 300) {
+        const field = fieldDefinitions.extraInfo[ci - 1];
+	    const type = field.type;
+		openEditor(obj.index, ci, type);
+	  }
+	  lastTap = now;
+	});
+	  
+	  /*td.addEventListener("touchstart", e => {
 		pressTimer = setTimeout(() => {
-		openContextMenu(obj.index, ci);
+          const field = fieldDefinitions.extraInfo[ci - 1];
+		  const type = field.type;
+		  openEditor(obj.index, ci, type);
 		}, 600);
 	  });
-
 	  td.addEventListener("touchend", e => {
 		clearTimeout(pressTimer);
-	  });
+	  });*/
 	  
       td.oncontextmenu = (e) => {
         e.preventDefault();
